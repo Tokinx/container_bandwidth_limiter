@@ -6,12 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Play, Square, RefreshCw, Share2, Trash2, Settings } from 'lucide-react';
+import { Play, Square, RefreshCw, Share2, Trash2 } from 'lucide-react';
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
   const [selectedContainer, setSelectedContainer] = useState<Container | null>(null);
-  const [editDialog, setEditDialog] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState(false);
   const [shareDialog, setShareDialog] = useState(false);
   const [confirmName, setConfirmName] = useState('');
@@ -126,17 +125,6 @@ export default function Dashboard() {
                     >
                       <Share2 className="w-4 h-4 mr-1" />
                       分享
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setSelectedContainer(container);
-                        setEditDialog(true);
-                      }}
-                    >
-                      <Settings className="w-4 h-4 mr-1" />
-                      配置
                     </Button>
                     <Button
                       size="sm"
