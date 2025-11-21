@@ -37,6 +37,12 @@ export class TrafficService {
 
     await this.syncContainers();
 
+    // 立即执行一次采集，便于调试
+    logger.info('[Traffic] Running initial traffic collection...');
+    await this.collectTraffic().catch((error) => {
+      logger.error('Error in initial traffic collection:', error);
+    });
+
     this.collectInterval = setInterval(() => {
       this.collectTraffic().catch((error) => {
         logger.error('Error in traffic collection:', error);
@@ -103,23 +109,29 @@ export class TrafficService {
 
   private async collectTraffic(): Promise<void> {
     const containers = this.containerRepo.findAll();
+    logger.debug(`[Traffic] Collecting traffic for ${containers.length} containers`);
 
     for (const container of containers) {
       try {
         const isRunning = await this.dockerService.isContainerRunning(container.id);
 
         if (!isRunning) {
+          logger.debug(`[Traffic] Container ${container.name} is not running, skipping`);
           continue;
         }
 
         const stats = await this.dockerService.getContainerStats(container.id);
         if (!stats) {
+          logger.warn(`[Traffic] Failed to get stats for container ${container.name}`);
           continue;
         }
+
+        logger.debug(`[Traffic] Container ${container.name} stats: rx=${stats.rx_bytes}, tx=${stats.tx_bytes}`);
 
         const cache = this.trafficCache[container.id];
 
         if (!cache) {
+          logger.info(`[Traffic] Initializing cache for container ${container.name}, bandwidth_used=${container.bandwidth_used}`);
           this.trafficCache[container.id] = {
             lastRxBytes: stats.rx_bytes,
             lastTxBytes: stats.tx_bytes,
@@ -143,6 +155,10 @@ export class TrafficService {
         cache.lastRxBytes = stats.rx_bytes;
         cache.lastTxBytes = stats.tx_bytes;
 
+        if (totalDelta > 0) {
+          logger.debug(`[Traffic] Container ${container.name} delta: rx=${rxDelta}, tx=${txDelta}, total=${totalDelta}, accumulated=${cache.accumulatedBytes}`);
+        }
+
         this.pendingLogs.push({
           container_id: container.id,
           rx_bytes: rxDelta,
@@ -164,6 +180,7 @@ export class TrafficService {
     }
 
     try {
+      logger.info(`[Persist] Persisting ${this.pendingLogs.length} traffic logs`);
       this.trafficRepo.batchCreate(this.pendingLogs);
 
       const containerUpdates = new Map<string, number>();
@@ -172,17 +189,21 @@ export class TrafficService {
         containerUpdates.set(log.container_id, current + log.total_bytes);
       }
 
+      logger.debug(`[Persist] Updating bandwidth for ${containerUpdates.size} containers`);
       for (const [containerId, totalBytes] of containerUpdates) {
         const cache = this.trafficCache[containerId];
         if (cache) {
+          logger.info(`[Persist] Container ${containerId}: updating bandwidth_used to ${cache.accumulatedBytes} bytes (${(cache.accumulatedBytes / 1024 / 1024 / 1024).toFixed(3)} GB)`);
           this.containerRepo.updateBandwidthUsed(containerId, cache.accumulatedBytes);
+        } else {
+          logger.warn(`[Persist] No cache found for container ${containerId}`);
         }
       }
 
-      logger.debug(`Persisted ${this.pendingLogs.length} traffic logs`);
+      logger.debug(`[Persist] Successfully persisted ${this.pendingLogs.length} traffic logs`);
       this.pendingLogs = [];
     } catch (error) {
-      logger.error('Failed to persist traffic logs:', error);
+      logger.error('[Persist] Failed to persist traffic logs:', error);
     }
   }
 

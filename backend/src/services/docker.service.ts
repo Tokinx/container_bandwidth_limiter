@@ -29,10 +29,19 @@ export class DockerService {
       const info = await container.inspect();
 
       if (!info.State.Running) {
+        logger.debug(`[Docker] Container ${containerId} is not running`);
         return null;
       }
 
       const stats = await container.stats({ stream: false });
+
+      // 调试：输出网络接口信息
+      if (stats.networks) {
+        const networkNames = Object.keys(stats.networks);
+        logger.debug(`[Docker] Container ${containerId} has ${networkNames.length} network interfaces: ${networkNames.join(', ')}`);
+      } else {
+        logger.warn(`[Docker] Container ${containerId} has no network stats`);
+      }
 
       const rxBytes = stats.networks
         ? Object.values(stats.networks).reduce((sum, net: any) => sum + (net.rx_bytes || 0), 0)
