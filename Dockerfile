@@ -16,20 +16,19 @@ RUN npm run build
 
 # Build backend
 FROM node:20-alpine AS backend-builder
-WORKDIR /app/backend
+WORKDIR /app
 
 # Copy package files
-COPY backend/package.json ./
-COPY package.json ../package.json
+COPY package.json ./
 
 # Install dependencies
 RUN npm install --legacy-peer-deps
 
-# Copy source code
-COPY backend/ ./
+# Copy backend source code
+COPY backend/ ./backend/
 
 # Build backend
-RUN npm run build
+RUN npm run build:backend
 
 # Production image
 FROM node:20-alpine
@@ -43,8 +42,8 @@ RUN npm install --production --legacy-peer-deps && \
 # Copy built backend
 COPY --from=backend-builder /app/dist ./dist
 
-# Copy built frontend
-COPY --from=frontend-builder /app/frontend/dist ./dist/frontend/dist
+# Copy built frontend to serve as static files
+COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 # Create necessary directories
 RUN mkdir -p /data /logs
