@@ -6,15 +6,24 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Play, Square, RefreshCw, Share2, Trash2 } from 'lucide-react';
+import { Play, Square, RefreshCw, Share2, Trash2, Settings } from 'lucide-react';
 
 export default function Dashboard() {
   const queryClient = useQueryClient();
   const [selectedContainer, setSelectedContainer] = useState<Container | null>(null);
   const [deleteDialog, setDeleteDialog] = useState(false);
   const [shareDialog, setShareDialog] = useState(false);
+  const [editDialog, setEditDialog] = useState(false);
   const [confirmName, setConfirmName] = useState('');
   const [shareUrl, setShareUrl] = useState('');
+
+  // 配置表单状态
+  const [editForm, setEditForm] = useState({
+    bandwidth_limit: '',
+    bandwidth_extra: '',
+    reset_day: '',
+    expire_at: '',
+  });
 
   const { data: containers, isLoading } = useQuery({
     queryKey: ['containers'],
@@ -49,6 +58,52 @@ export default function Dashboard() {
       setConfirmName('');
     },
   });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) =>
+      containerApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['containers'] });
+      setEditDialog(false);
+    },
+  });
+
+  const handleEdit = (container: Container) => {
+    setSelectedContainer(container);
+    // 将字节转换为 GB 显示
+    const limitGB = container.bandwidth_limit ? (container.bandwidth_limit / (1024 ** 3)).toFixed(2) : '';
+    const extraGB = container.bandwidth_extra ? (container.bandwidth_extra / (1024 ** 3)).toFixed(2) : '0';
+
+    setEditForm({
+      bandwidth_limit: limitGB,
+      bandwidth_extra: extraGB,
+      reset_day: container.reset_day?.toString() || '',
+      expire_at: container.expire_at ? new Date(container.expire_at).toISOString().slice(0, 16) : '',
+    });
+    setEditDialog(true);
+  };
+
+  const handleUpdate = () => {
+    if (!selectedContainer) return;
+
+    const data: any = {};
+
+    // 将 GB 转换为字节
+    if (editForm.bandwidth_limit) {
+      data.bandwidth_limit = Math.floor(parseFloat(editForm.bandwidth_limit) * (1024 ** 3));
+    }
+    if (editForm.bandwidth_extra) {
+      data.bandwidth_extra = Math.floor(parseFloat(editForm.bandwidth_extra) * (1024 ** 3));
+    }
+    if (editForm.reset_day) {
+      data.reset_day = parseInt(editForm.reset_day);
+    }
+    if (editForm.expire_at) {
+      data.expire_at = new Date(editForm.expire_at).getTime();
+    }
+
+    updateMutation.mutate({ id: selectedContainer.id, data });
+  };
 
   const handleShare = async (container: Container) => {
     const response = await containerApi.getShareToken(container.id);
@@ -91,6 +146,14 @@ export default function Dashboard() {
                     </p>
                   </div>
                   <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleEdit(container)}
+                    >
+                      <Settings className="w-4 h-4 mr-1" />
+                      配置
+                    </Button>
                     {container.status === 'stopped' || container.status === 'expired' ? (
                       <Button
                         size="sm"
@@ -184,6 +247,75 @@ export default function Dashboard() {
           );
         })}
       </div>
+
+      <Dialog open={editDialog} onOpenChange={setEditDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>配置容器 - {selectedContainer?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">流量限制 (GB)</label>
+              <Input
+                type="number"
+                step="0.01"
+                value={editForm.bandwidth_limit}
+                onChange={(e) => setEditForm({ ...editForm, bandwidth_limit: e.target.value })}
+                placeholder="留空表示无限制"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                每月基础流量配额
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium">临时额外流量 (GB)</label>
+              <Input
+                type="number"
+                step="0.01"
+                value={editForm.bandwidth_extra}
+                onChange={(e) => setEditForm({ ...editForm, bandwidth_extra: e.target.value })}
+                placeholder="0"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                临时增加的流量配额，重置时会清零
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium">每月重置日期 (1-31)</label>
+              <Input
+                type="number"
+                min="1"
+                max="31"
+                value={editForm.reset_day}
+                onChange={(e) => setEditForm({ ...editForm, reset_day: e.target.value })}
+                placeholder="1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                每月的哪一天重置流量（例如：1 表示每月1号）
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium">到期时间</label>
+              <Input
+                type="datetime-local"
+                value={editForm.expire_at}
+                onChange={(e) => setEditForm({ ...editForm, expire_at: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                容器到期后将自动停止
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialog(false)}>
+              取消
+            </Button>
+            <Button onClick={handleUpdate}>
+              保存
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={shareDialog} onOpenChange={setShareDialog}>
         <DialogContent>
