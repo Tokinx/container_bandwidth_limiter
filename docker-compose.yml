@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  bandwidth-limiter:
+    build: .
+    container_name: bandwidth-limiter
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./data:/data
+      - ./logs:/logs
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - TZ=Asia/Shanghai
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - JWT_SECRET=${JWT_SECRET:-change-this-secret-key}
+      - COLLECT_INTERVAL=${COLLECT_INTERVAL:-1000}
+      - PERSIST_INTERVAL=${PERSIST_INTERVAL:-30000}
+      - DB_PATH=/data/bandwidth.db
+      - DOCKER_SOCKET=/var/run/docker.sock
+      - MONITOR_LABEL=${MONITOR_LABEL:-bandwidth.monitor}
+    labels:
+      - "bandwidth.monitor=false"
+    networks:
+      - bandwidth-network
+
+networks:
+  bandwidth-network:
+    driver: bridge

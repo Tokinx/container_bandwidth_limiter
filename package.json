@@ -1,0 +1,45 @@
+{
+  "name": "container-bandwidth-limiter",
+  "version": "1.0.0",
+  "description": "Docker容器流量管理系统",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch backend/src/server.ts",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "tsc -p backend/tsconfig.json",
+    "build:frontend": "cd frontend && npm run build",
+    "start": "node dist/server.js",
+    "lint": "eslint backend/src --ext .ts",
+    "format": "prettier --write \"backend/src/**/*.ts\""
+  },
+  "keywords": ["docker", "bandwidth", "traffic", "monitoring"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "dockerode": "^4.0.2",
+    "better-sqlite3": "^9.2.2",
+    "jsonwebtoken": "^9.0.2",
+    "bcryptjs": "^2.4.3",
+    "node-cron": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.10.6",
+    "@types/dockerode": "^3.3.23",
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node-cron": "^3.0.11",
+    "@types/cors": "^2.8.17",
+    "typescript": "^5.3.3",
+    "tsx": "^4.7.0",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/eslint-plugin": "^6.17.0",
+    "@typescript-eslint/parser": "^6.17.0",
+    "prettier": "^3.1.1"
+  }
+}

@@ -1,0 +1,81 @@
+version: '3.8'
+
+# 使用 GitHub Container Registry 预构建镜像的 Docker Compose 配置
+# 使用方法：
+#   1. 将 YOUR_USERNAME 替换为你的 GitHub 用户名
+#   2. 修改 ADMIN_PASSWORD 和 JWT_SECRET
+#   3. 运行: docker-compose -f docker-compose.ghcr.yml up -d
+
+services:
+  bandwidth-limiter:
+    # 替换 YOUR_USERNAME 为你的 GitHub 用户名
+    image: ghcr.io/YOUR_USERNAME/container_bandwidth_limiter:latest
+    container_name: bandwidth-limiter
+    restart: unless-stopped
+
+    ports:
+      - "3000:3000"
+
+    volumes:
+      # Docker socket（只读）
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # 数据持久化
+      - ./data:/data
+      # 日志持久化
+      - ./logs:/logs
+
+    environment:
+      # 基础配置
+      - NODE_ENV=production
+      - PORT=3000
+      - TZ=Asia/Shanghai
+
+      # 管理员认证（请修改密码！）
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=change_this_password
+      - JWT_SECRET=change_this_secret_key_to_random_string
+
+      # 采集配置
+      - COLLECT_INTERVAL=1000        # 采集间隔（毫秒）
+      - PERSIST_INTERVAL=30000       # 持久化间隔（毫秒）
+
+      # 数据库配置
+      - DB_PATH=/data/bandwidth.db
+
+      # Docker 配置
+      - DOCKER_SOCKET=/var/run/docker.sock
+      - MONITOR_LABEL=bandwidth.monitor
+
+    labels:
+      # 不监控自身
+      - "bandwidth.monitor=false"
+
+    networks:
+      - bandwidth-network
+
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/auth/verify', (r) => {process.exit(r.statusCode === 401 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
+networks:
+  bandwidth-network:
+    driver: bridge
+
+# 使用示例：
+#
+# 1. 启动服务
+#    docker-compose -f docker-compose.ghcr.yml up -d
+#
+# 2. 查看日志
+#    docker-compose -f docker-compose.ghcr.yml logs -f
+#
+# 3. 停止服务
+#    docker-compose -f docker-compose.ghcr.yml down
+#
+# 4. 更新镜像
+#    docker-compose -f docker-compose.ghcr.yml pull
+#    docker-compose -f docker-compose.ghcr.yml up -d
