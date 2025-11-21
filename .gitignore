@@ -38,4 +38,4 @@ Thumbs.db
 # Data
 data/
 .docs/
-.github/DEPLOYMENT.md
+.github/*.md

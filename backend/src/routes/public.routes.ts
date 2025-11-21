@@ -4,12 +4,14 @@ import { DockerService } from '../services/docker.service';
 import logger from '../utils/logger';
 
 const router = Router();
-const containerRepo = new ContainerRepository();
+
+// 延迟初始化，避免在模块加载时访问未初始化的数据库
+const getContainerRepo = () => new ContainerRepository();
 const dockerService = new DockerService();
 
 router.get('/share/:token', async (req: Request, res: Response) => {
   try {
-    const container = containerRepo.findByShareToken(req.params.token);
+    const container = getContainerRepo().findByShareToken(req.params.token);
 
     if (!container) {
       return res.status(404).json({ error: 'Share link not found or expired' });

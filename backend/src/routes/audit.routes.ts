@@ -4,13 +4,16 @@ import { authMiddleware } from '../middleware/auth';
 import logger from '../utils/logger';
 
 const router = Router();
-const auditRepo = new AuditRepository();
+
+// 延迟初始化，避免在模块加载时访问未初始化的数据库
+const getAuditRepo = () => new AuditRepository();
 
 router.get('/logs', authMiddleware, async (req: Request, res: Response) => {
   try {
     const limit = parseInt(req.query.limit as string) || 100;
     const offset = parseInt(req.query.offset as string) || 0;
 
+    const auditRepo = getAuditRepo();
     const logs = auditRepo.findAll(limit, offset);
     const total = auditRepo.count();
 
@@ -23,6 +26,7 @@ router.get('/logs', authMiddleware, async (req: Request, res: Response) => {
 
 router.get('/stats', authMiddleware, async (req: Request, res: Response) => {
   try {
+    const auditRepo = getAuditRepo();
     const total = auditRepo.count();
     const recentLogs = auditRepo.findAll(10, 0);
 
