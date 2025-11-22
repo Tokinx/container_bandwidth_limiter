@@ -3,6 +3,10 @@ import path from 'path';
 
 dotenv.config();
 
+const derivedSelfContainerId =
+  process.env.SELF_CONTAINER_ID ||
+  (process.env.HOSTNAME && /^[0-9a-f]{12,64}$/i.test(process.env.HOSTNAME) ? process.env.HOSTNAME : null);
+
 export const config = {
   // 服务配置
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -26,4 +30,6 @@ export const config = {
   // Docker
   dockerSocket: process.env.DOCKER_SOCKET || '/var/run/docker.sock',
   monitorLabel: process.env.MONITOR_LABEL || 'bandwidth.monitor',
+  selfContainerId: derivedSelfContainerId,
+  selfContainerName: process.env.SELF_CONTAINER_NAME || null,
 };

@@ -116,20 +116,20 @@ docker-compose up -d
 
 打开浏览器访问：`http://localhost:3000`
 
-## 标记需要监控的容器
+## 容器自动发现与排除
 
-要监控某个容器的流量，需要为其添加标签：
+系统会自动发现并监控除自身外的所有 Docker 容器，无需额外添加标签。如果需要显式排除某些容器，可为它们添加 `bandwidth.monitor=false`（或自定义 `MONITOR_LABEL`）的标签：
 
 ```bash
-# 启动容器时添加标签
-docker run -d --label bandwidth.monitor=true nginx
+# 启动容器时禁止被监控
+docker run -d --label bandwidth.monitor=false redis
 
-# 或在 docker-compose.yml 中添加
+# 或在 docker-compose.yml 中配置
 services:
   myapp:
-    image: nginx
+    image: redis
     labels:
-      - "bandwidth.monitor=true"
+      - "bandwidth.monitor=false"
 ```
 
 ## 配置说明
@@ -148,7 +148,9 @@ services:
 | `PERSIST_INTERVAL` | 持久化间隔（毫秒） | `30000` |
 | `DB_PATH` | 数据库路径 | `/data/bandwidth.db` |
 | `DOCKER_SOCKET` | Docker Socket 路径 | `/var/run/docker.sock` |
-| `MONITOR_LABEL` | 监控标签 | `bandwidth.monitor` |
+| `MONITOR_LABEL` | 用于禁止监控的标签键 | `bandwidth.monitor` |
+| `SELF_CONTAINER_ID` | 显式指定当前系统容器 ID（覆盖自动识别） | 空 |
+| `SELF_CONTAINER_NAME` | 显式指定当前系统容器名称 | 空 |
 
 ### 数据持久化
 

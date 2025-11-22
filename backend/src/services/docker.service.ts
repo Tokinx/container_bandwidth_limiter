@@ -1,21 +1,39 @@
 import Docker from 'dockerode';
+import { Readable } from 'stream';
 import { config } from '../config';
 import logger from '../utils/logger';
 import { ContainerStats } from '../types';
 
 export class DockerService {
   private docker: Docker;
+  private readonly selfContainerId?: string | null;
+  private readonly selfContainerName?: string | null;
 
   constructor() {
     this.docker = new Docker({ socketPath: config.dockerSocket });
+    this.selfContainerId = config.selfContainerId;
+    this.selfContainerName = config.selfContainerName;
   }
 
   async getMonitoredContainers(): Promise<Docker.ContainerInfo[]> {
     try {
       const containers = await this.docker.listContainers({ all: true });
       return containers.filter((container) => {
+        if (this.isSelfContainer(container)) {
+          return false;
+        }
+
         const labels = container.Labels || {};
-        return labels[config.monitorLabel] === 'true';
+        const labelValue = labels[config.monitorLabel];
+
+        if (labelValue && typeof labelValue === 'string') {
+          const normalized = labelValue.toLowerCase();
+          if (normalized === 'false' || normalized === '0') {
+            return false;
+          }
+        }
+
+        return true;
       });
     } catch (error) {
       logger.error('Failed to list containers:', error);
@@ -33,7 +51,8 @@ export class DockerService {
         return null;
       }
 
-      const stats = await container.stats({ stream: false });
+      const statsResult = await container.stats({ stream: false });
+      const stats = await this.normalizeStats(statsResult);
 
       // 调试：输出网络接口信息
       if (stats.networks) {
@@ -51,8 +70,8 @@ export class DockerService {
         ? Object.values(stats.networks).reduce((sum, net: any) => sum + (net.tx_bytes || 0), 0)
         : 0;
 
-      const memoryUsage = stats.memory_stats.usage || 0;
-      const memoryLimit = stats.memory_stats.limit || 0;
+      const memoryUsage = stats.memory_stats?.usage || 0;
+      const memoryLimit = stats.memory_stats?.limit || 0;
 
       return {
         id: containerId,
@@ -128,5 +147,56 @@ export class DockerService {
     } catch (error) {
       return false;
     }
+  }
+
+  private isSelfContainer(container: Docker.ContainerInfo): boolean {
+    if (this.selfContainerName) {
+      const names = container.Names || [];
+      if (names.some((name) => name.replace(/^\//, '') === this.selfContainerName)) {
+        return true;
+      }
+    }
+
+    if (this.selfContainerId) {
+      if (container.Id === this.selfContainerId || container.Id.startsWith(this.selfContainerId)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private async normalizeStats(result: any): Promise<any> {
+    if (this.isReadableStream(result)) {
+      return this.readStream(result);
+    }
+    return result;
+  }
+
+  private isReadableStream(value: any): value is Readable {
+    return value instanceof Readable || (value && typeof value.on === 'function' && typeof value.read === 'function');
+  }
+
+  private readStream(stream: Readable): Promise<any> {
+    return new Promise((resolve, reject) => {
+      let raw = '';
+      stream.setEncoding('utf8');
+
+      stream.on('data', (chunk: string) => {
+        raw += chunk;
+      });
+
+      stream.on('end', () => {
+        try {
+          resolve(JSON.parse(raw));
+        } catch (error) {
+          reject(error);
+        }
+      });
+
+      stream.on('error', (error) => {
+        reject(error);
+      });
+    });
   }
 }
