@@ -1,7 +1,5 @@
 import winston from 'winston';
 import path from 'path';
-import { config } from '../config';
-
 const logDir = path.join(process.cwd(), 'logs');
 
 const logger = winston.createLogger({
@@ -19,7 +17,7 @@ const logger = winston.createLogger({
     new winston.transports.Console({
       format: winston.format.combine(
         winston.format.colorize(),
-        winston.format.printf(({ level, message, timestamp, ...meta }) => {
+        winston.format.printf(({ level, message, timestamp }) => {
           return `${timestamp} [${level}]: ${message}`;
         })
       ),

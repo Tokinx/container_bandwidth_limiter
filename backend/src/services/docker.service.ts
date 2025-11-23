@@ -4,6 +4,11 @@ import { config } from '../config';
 import logger from '../utils/logger';
 import { ContainerStats } from '../types';
 
+type DockerNetworkStats = {
+  rx_bytes?: number;
+  tx_bytes?: number;
+};
+
 export class DockerService {
   private docker: Docker;
   private readonly selfContainerId?: string | null;
@@ -62,13 +67,12 @@ export class DockerService {
         logger.warn(`[Docker] Container ${containerId} has no network stats`);
       }
 
-      const rxBytes = stats.networks
-        ? Object.values(stats.networks).reduce((sum, net: any) => sum + (net.rx_bytes || 0), 0)
-        : 0;
+      const networkStats = stats.networks
+        ? Object.values(stats.networks as Record<string, DockerNetworkStats>)
+        : [];
 
-      const txBytes = stats.networks
-        ? Object.values(stats.networks).reduce((sum, net: any) => sum + (net.tx_bytes || 0), 0)
-        : 0;
+      const rxBytes = networkStats.reduce((sum, net) => sum + (net.rx_bytes ?? 0), 0);
+      const txBytes = networkStats.reduce((sum, net) => sum + (net.tx_bytes ?? 0), 0);
 
       const memoryUsage = stats.memory_stats?.usage || 0;
       const memoryLimit = stats.memory_stats?.limit || 0;
@@ -94,8 +98,9 @@ export class DockerService {
       const container = this.docker.getContainer(containerId);
       await container.start();
       logger.info(`Container ${containerId} started`);
-    } catch (error: any) {
-      if (error.statusCode === 304) {
+    } catch (error: unknown) {
+      const err = error as { statusCode?: number };
+      if (err?.statusCode === 304) {
         logger.debug(`Container ${containerId} already started`);
         return;
       }
@@ -109,8 +114,9 @@ export class DockerService {
       const container = this.docker.getContainer(containerId);
       await container.stop();
       logger.info(`Container ${containerId} stopped`);
-    } catch (error: any) {
-      if (error.statusCode === 304) {
+    } catch (error: unknown) {
+      const err = error as { statusCode?: number };
+      if (err?.statusCode === 304) {
         logger.debug(`Container ${containerId} already stopped`);
         return;
       }
@@ -166,18 +172,18 @@ export class DockerService {
     return false;
   }
 
-  private async normalizeStats(result: any): Promise<any> {
+  private async normalizeStats(result: Docker.ContainerStats | Readable): Promise<Docker.ContainerStats> {
     if (this.isReadableStream(result)) {
       return this.readStream(result);
     }
     return result;
   }
 
-  private isReadableStream(value: any): value is Readable {
-    return value instanceof Readable || (value && typeof value.on === 'function' && typeof value.read === 'function');
+  private isReadableStream(value: unknown): value is Readable {
+    return value instanceof Readable || (!!value && typeof (value as Readable).on === 'function' && typeof (value as Readable).read === 'function');
   }
 
-  private readStream(stream: Readable): Promise<any> {
+  private readStream(stream: Readable): Promise<Docker.ContainerStats> {
     return new Promise((resolve, reject) => {
       let raw = '';
       stream.setEncoding('utf8');

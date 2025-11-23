@@ -122,6 +122,26 @@ router.post('/:id/reset', authMiddleware, async (req: Request, res: Response) =>
   }
 });
 
+router.post('/refresh', authMiddleware, async (_req: Request, res: Response) => {
+  try {
+    if (!trafficService) {
+      return res.status(503).json({ error: 'Traffic service not initialized' });
+    }
+
+    await trafficService.refreshNow();
+    getAuditRepo().create({
+      container_id: null,
+      action: 'reset',
+      details: 'Manual traffic refresh triggered',
+      timestamp: Date.now(),
+    });
+    res.json({ message: 'Refresh triggered successfully' });
+  } catch (error) {
+    logger.error('Failed to refresh traffic:', error);
+    res.status(500).json({ error: 'Failed to refresh traffic' });
+  }
+});
+
 router.get('/:id/share', authMiddleware, async (req: Request, res: Response) => {
   try {
     const containerRepo = getContainerRepo();

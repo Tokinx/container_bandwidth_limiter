@@ -24,6 +24,8 @@ export class TrafficService {
   private pendingLogs: Omit<TrafficLog, 'id'>[] = [];
   private collectInterval?: NodeJS.Timeout;
   private persistInterval?: NodeJS.Timeout;
+  private containerSyncInterval?: NodeJS.Timeout;
+  private ongoingSync: Promise<void> | null = null;
 
   constructor() {
     this.dockerService = new DockerService();
@@ -35,7 +37,7 @@ export class TrafficService {
   async start(): Promise<void> {
     logger.info('Starting traffic collection service...');
 
-    await this.syncContainers();
+    await this.syncContainers(true);
 
     // 立即执行一次采集，便于调试
     logger.info('[Traffic] Running initial traffic collection...');
@@ -53,8 +55,14 @@ export class TrafficService {
       this.persistTraffic();
     }, config.persistInterval);
 
+    this.containerSyncInterval = setInterval(() => {
+      this.syncContainers().catch((error) => {
+        logger.error('Error in scheduled container sync:', error);
+      });
+    }, config.containerSyncInterval);
+
     logger.info(
-      `Traffic service started (collect: ${config.collectInterval}ms, persist: ${config.persistInterval}ms)`
+      `Traffic service started (collect: ${config.collectInterval}ms, persist: ${config.persistInterval}ms, sync: ${config.containerSyncInterval}ms)`
     );
   }
 
@@ -65,45 +73,78 @@ export class TrafficService {
     if (this.persistInterval) {
       clearInterval(this.persistInterval);
     }
+    if (this.containerSyncInterval) {
+      clearInterval(this.containerSyncInterval);
+    }
     this.persistTraffic();
     logger.info('Traffic service stopped');
   }
 
-  private async syncContainers(): Promise<void> {
-    try {
-      const dockerContainers = await this.dockerService.getMonitoredContainers();
-      const dbContainers = this.containerRepo.findAll();
-      const dbContainerIds = new Set(dbContainers.map((c) => c.id));
-
-      for (const dockerContainer of dockerContainers) {
-        if (!dbContainerIds.has(dockerContainer.Id)) {
-          const name = dockerContainer.Names[0]?.replace(/^\//, '') || dockerContainer.Id;
-          this.containerRepo.create({
-            id: dockerContainer.Id,
-            name,
-            bandwidth_limit: null,
-            bandwidth_used: 0,
-            bandwidth_extra: 0,
-            reset_day: 1,
-            last_reset_at: null,
-            expire_at: null,
-            status: dockerContainer.State === 'running' ? 'active' : 'stopped',
-            share_token: null,
-            share_token_expire: null,
-          });
-
-          this.auditRepo.create({
-            container_id: dockerContainer.Id,
-            action: 'start',
-            details: `Container discovered and added to monitoring`,
-            timestamp: Date.now(),
-          });
-
-          logger.info(`New container added to monitoring: ${name} (${dockerContainer.Id})`);
-        }
+  private async syncContainers(force = false): Promise<void> {
+    if (this.ongoingSync) {
+      if (!force) {
+        logger.debug('[Traffic] Container sync already in progress, skipping');
+        return this.ongoingSync;
       }
+      logger.debug('[Traffic] Waiting for ongoing container sync to finish (forced run)');
+      await this.ongoingSync;
+    }
+
+    const syncTask = (async () => {
+      try {
+        const dockerContainers = await this.dockerService.getMonitoredContainers();
+        const dbContainers = this.containerRepo.findAll();
+        const dbContainerIds = new Set(dbContainers.map((c) => c.id));
+
+        for (const dockerContainer of dockerContainers) {
+          if (!dbContainerIds.has(dockerContainer.Id)) {
+            const name = dockerContainer.Names[0]?.replace(/^\//, '') || dockerContainer.Id;
+            this.containerRepo.create({
+              id: dockerContainer.Id,
+              name,
+              bandwidth_limit: null,
+              bandwidth_used: 0,
+              bandwidth_extra: 0,
+              reset_day: 1,
+              last_reset_at: null,
+              expire_at: null,
+              status: dockerContainer.State === 'running' ? 'active' : 'stopped',
+              share_token: null,
+              share_token_expire: null,
+            });
+
+            this.auditRepo.create({
+              container_id: dockerContainer.Id,
+              action: 'start',
+              details: `Container discovered and added to monitoring`,
+              timestamp: Date.now(),
+            });
+
+            logger.info(`New container added to monitoring: ${name} (${dockerContainer.Id})`);
+          }
+        }
+      } catch (error) {
+        logger.error('Failed to sync containers:', error);
+        throw error;
+      } finally {
+        this.ongoingSync = null;
+      }
+    })();
+
+    this.ongoingSync = syncTask;
+    return syncTask;
+  }
+
+  async refreshNow(): Promise<void> {
+    logger.info('[Traffic] Manual refresh triggered');
+    try {
+      await this.syncContainers(true);
+      await this.collectTraffic();
+      this.persistTraffic();
+      logger.info('[Traffic] Manual refresh completed');
     } catch (error) {
-      logger.error('Failed to sync containers:', error);
+      logger.error('[Traffic] Manual refresh failed:', error);
+      throw error;
     }
   }
 
@@ -114,6 +155,15 @@ export class TrafficService {
     for (const container of containers) {
       try {
         const isRunning = await this.dockerService.isContainerRunning(container.id);
+
+        if (container.status !== 'expired') {
+          const desiredStatus: Container['status'] = isRunning ? 'active' : 'stopped';
+          if (container.status !== desiredStatus) {
+            this.containerRepo.updateStatus(container.id, desiredStatus);
+            container.status = desiredStatus;
+            logger.info(`[Traffic] Container ${container.name} status updated to ${desiredStatus}`);
+          }
+        }
 
         if (!isRunning) {
           logger.debug(`[Traffic] Container ${container.name} is not running, skipping`);
@@ -190,7 +240,7 @@ export class TrafficService {
       }
 
       logger.debug(`[Persist] Updating bandwidth for ${containerUpdates.size} containers`);
-      for (const [containerId, totalBytes] of containerUpdates) {
+      for (const [containerId] of containerUpdates) {
         const cache = this.trafficCache[containerId];
         if (cache) {
           logger.info(`[Persist] Container ${containerId}: updating bandwidth_used to ${cache.accumulatedBytes} bytes (${(cache.accumulatedBytes / 1024 / 1024 / 1024).toFixed(3)} GB)`);

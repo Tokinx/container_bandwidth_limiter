@@ -23,6 +23,7 @@ export const config = {
   // 采集配置
   collectInterval: parseInt(process.env.COLLECT_INTERVAL || '1000', 10),
   persistInterval: parseInt(process.env.PERSIST_INTERVAL || '30000', 10),
+  containerSyncInterval: parseInt(process.env.CONTAINER_SYNC_INTERVAL || `${5 * 60 * 1000}`, 10),
 
   // 数据库
   dbPath: process.env.DB_PATH || path.join(process.cwd(), 'data', 'bandwidth.db'),

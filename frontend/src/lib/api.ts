@@ -63,6 +63,7 @@ export const containerApi = {
   start: (id: string) => api.post(`/containers/${id}/start`),
   stop: (id: string) => api.post(`/containers/${id}/stop`),
   reset: (id: string) => api.post(`/containers/${id}/reset`),
+  refresh: () => api.post('/containers/refresh'),
   getShareToken: (id: string) => api.get<{ token: string; url: string }>(`/containers/${id}/share`),
   delete: (id: string, confirmName: string) =>
     api.delete(`/containers/${id}`, { data: { confirmName } }),

@@ -146,6 +146,7 @@ services:
 | `JWT_SECRET` | JWT 密钥 | `change-this-secret-key` |
 | `COLLECT_INTERVAL` | 采集间隔（毫秒） | `1000` |
 | `PERSIST_INTERVAL` | 持久化间隔（毫秒） | `30000` |
+| `CONTAINER_SYNC_INTERVAL` | 自动发现 Docker 容器间隔（毫秒） | `300000` |
 | `DB_PATH` | 数据库路径 | `/data/bandwidth.db` |
 | `DOCKER_SOCKET` | Docker Socket 路径 | `/var/run/docker.sock` |
 | `MONITOR_LABEL` | 用于禁止监控的标签键 | `bandwidth.monitor` |
@@ -168,6 +169,7 @@ services:
 在管理界面中，您可以：
 
 - 查看所有被监控容器的流量使用情况
+- 点击「手动刷新」按钮强制同步 Docker 状态与最新流量
 - 启动/停止容器
 - 重置容器流量统计
 - 配置流量限制和到期时间

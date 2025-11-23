@@ -49,6 +49,12 @@ export default function Dashboard() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['containers'] }),
   });
 
+  const refreshMutation = useMutation({
+    mutationFn: () => containerApi.refresh(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['containers'] }),
+    onError: () => alert('刷新失败，请稍后重试'),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) =>
       containerApi.delete(id, name),
@@ -124,9 +130,22 @@ export default function Dashboard() {
 
   return (
     <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">容器管理</h1>
-        <p className="text-muted-foreground mt-2">监控和管理Docker容器流量</p>
+      <div className="flex flex-col gap-4 mb-8 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">容器管理</h1>
+          <p className="text-muted-foreground mt-2">监控和管理Docker容器流量</p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => refreshMutation.mutate()}
+          disabled={refreshMutation.isPending}
+        >
+          <RefreshCw
+            className={`w-4 h-4 mr-1 ${refreshMutation.isPending ? 'animate-spin' : ''}`}
+          />
+          {refreshMutation.isPending ? '刷新中...' : '手动刷新'}
+        </Button>
       </div>
 
       <div className="grid gap-4">

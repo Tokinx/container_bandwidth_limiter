@@ -54,7 +54,7 @@ export class ContainerRepository {
     if (!existing) return undefined;
 
     const updates: string[] = [];
-    const values: any[] = [];
+    const values: Array<number | string | null> = [];
 
     if (data.bandwidth_limit !== undefined) {
       updates.push('bandwidth_limit = ?');
@@ -104,7 +104,7 @@ export class ContainerRepository {
   resetBandwidth(id: string): void {
     const stmt = this.db.prepare(`
       UPDATE containers
-      SET bandwidth_used = 0, last_reset_at = ?, updated_at = ?
+      SET bandwidth_used = 0, bandwidth_extra = 0, last_reset_at = ?, updated_at = ?
       WHERE id = ?
     `);
     const now = Date.now();
